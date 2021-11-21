@@ -1,0 +1,14 @@
+Windows Registry Editor Version 5.00
+
+; This file is part of initrg project.
+; Licensed under the terms of the GNU General Public License v3 or later.
+
+; SystemDistro.reg: Registry file to register system distribution in WSL2
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Lxss\{00362528-b577-485f-a4bf-8192eef46e26}]
+"State"=dword:1
+"DistributionName"="system"
+"Version"=dword:2
+"BasePath"="\\\\?\\C:\\WSL"
+"Flags"=dword:f
+"DefaultUid"=dword:0
