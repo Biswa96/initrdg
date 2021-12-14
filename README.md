@@ -16,6 +16,7 @@ this program. This may totally destroy your current WSL environment.
 * [Preparation](#preparation)
 * [How to use](#how-to-use)
 * [Differences with initrd](#differences-with-initrd)
+* [Caveats](#caveats)
 * [Acknowledgments](#acknowledgments)
 * [License](#license)
 
@@ -36,12 +37,24 @@ Feel free to use any compiler toolchain and libc.
 
 ## Preparation
 
+:warning: **Warning:** The following steps requires read/write permission in
+System32 folder. Any type of wrong step may make your entire WSL setup or even
+the operating system unusable.
+
 * Download WSL msixbundle package from [WSL Release page]. In that msixbundle,
 extract the ARM64 or X64 msix according to your CPU architecture. Extract the
 msix in `C:\WSL` path (default) or at your choice (need modification). Use any
 program that can extract from ZIP format e.g. unzip, 7zip etc.
 
 [WSL Release page]: https://github.com/microsoft/WSL/releases
+
+* In `C:\WSL` directory, remove the following two lines from wslg.rdp file.
+This enables full desktop mode instead of separate application window mode.
+
+```
+remoteapplicationmode:i:1
+remoteapplicationprogram:s:dummy-entry
+```
 
 * In `C:\WSL` directory, convert the system.vhd to ext4.vhdx file. Because Lxss
 service expects the WSL distribution in exactly ext4.vhdx named file. Use this
@@ -80,6 +93,7 @@ export DISPLAY=:0
 export XDG_RUNTIME_DIR=/mnt/wsl/runtime-dir
 export PULSE_SERVER=/mnt/wsl/PulseServer
 export WSL2_INSTALL_PATH="C:\\WSL"
+export WSL2_WESTON_SHELL_OVERRIDE=desktop-shell
 export WSL2_VM_ID=<guid>
 ```
 
@@ -99,6 +113,12 @@ Windows 10 and 11 systems. This does NOT do:
 * Create or attach swap file.
 * Execute localhost or telemetry processes.
 * Compact memory.
+
+## Caveats
+
+* Every GUI applications are in one big window. Because Wayland apps become
+unresponsive in rdprail-shell which is used by-default to show apps in separate
+windows.
 
 ## Acknowledgments
 
