@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "fs.h"
@@ -15,6 +17,99 @@
 #include "util.h"
 
 volatile int g_addGui = false;
+
+int start_import(const char *dir)
+{
+    int ret = 0, wstatus;
+
+    const pid_t childPid = fork();
+    if (childPid < 0)
+    {
+        LOG_ERROR("fork %d", errno);
+        return childPid;
+    }
+
+    if (!childPid)
+    {
+        const int stdinSock = connect_hv_socket(LXSS_SERVER_PORT, STDIN_FILENO, false);
+        if (stdinSock >= 0)
+        {
+            const int stderrSock = connect_hv_socket(LXSS_SERVER_PORT, STDERR_FILENO, false);
+            if (stderrSock >= 0)
+            {
+                ret = execl("/tools/bsdtar", "/tools/bsdtar", "-C", dir, "-x", "-p",
+                    "--xattrs", "-f", "-", NULL);
+                if ( ret < 0 )
+                    LOG_ERROR("execl %d", errno);
+                close(stdinSock);
+            }
+            close(stderrSock);
+        }
+        exit(ret);
+    }
+
+    ret = TEMP_FAILURE_RETRY(waitpid(childPid, &wstatus, 0));
+    if (ret >= 0)
+        return -(wstatus != 0);
+    else
+        LOG_ERROR("waitpid %d", errno);
+    return ret;
+}
+
+int start_export(const char *dir)
+{
+    int ret = 0, wstatus;
+
+    const int stdoutSock = connect_hv_socket(LXSS_SERVER_PORT, -1, true);
+    if (stdoutSock < 0)
+        return stdoutSock;
+
+    const pid_t childPid = fork();
+    if (childPid < 0)
+    {
+        LOG_ERROR("fork %d", errno);
+        close(stdoutSock);
+        return childPid;
+    }
+
+    if (!childPid)
+    {
+        if (stdoutSock != STDOUT_FILENO)
+        {
+            ret = TEMP_FAILURE_RETRY(dup2(stdoutSock, STDOUT_FILENO));
+            if (ret < 0)
+            {
+                LOG_ERROR("dup2 %d", errno);
+                exit(ret);
+            }
+            close(stdoutSock);
+        }
+        const int stderrSock = connect_hv_socket(LXSS_SERVER_PORT, STDERR_FILENO, false);
+        if (stderrSock >= 0)
+        {
+            ret = execl("/tools/bsdtar", "/tools/bsdtar", "-C", dir, "-c",
+                "--one-file-system", "--xattrs", "-f", "-", ".", NULL);
+            if (ret < 0)
+                LOG_ERROR("execl %d", errno);
+            close(stderrSock);
+        }
+        exit(ret);
+    }
+
+    ret = TEMP_FAILURE_RETRY(waitpid(childPid, &wstatus, 0));
+    if (ret < 0)
+    {
+        LOG_ERROR("waitpid %d", errno);
+        close(stdoutSock);
+        return ret;
+    }
+    ret = shutdown(stdoutSock, SHUT_WR);
+    if (ret < 0)
+        LOG_ERROR("shutdown %d", errno);
+    ret = -(wstatus != 0);
+    close(stdoutSock);
+    return ret;
+}
 
 int start_gns(const int gnsSock)
 {

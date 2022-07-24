@@ -8,6 +8,8 @@
 
 extern int g_addGui;
 
+int start_import(const char *dir);
+int start_export(const char *dir);
 int start_gns(const int gnsSock);
 int start_localhost(void);
 int start_telemetry(void);

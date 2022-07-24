@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <sched.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
@@ -109,6 +110,8 @@ int msg_process(const int msgSock, struct initrd_msg_buffer *buf, size_t len)
     switch (buf->type)
     {
         case MSG_START_INIT:
+        case MSG_IMPORT_DISTRO:
+        case MSG_EXPORT_DISTRO:
         {
             struct initrd_msg_start_init *msg = (void*)buf;
             LOG_INFO("distro_scsi_path %s", (char*)msg + msg->distro_scsi_path);
@@ -117,7 +120,7 @@ int msg_process(const int msgSock, struct initrd_msg_buffer *buf, size_t len)
             if (writeSock < 0) return writeSock;
 
             const int tidUserDistro = syscall(SYS_clone,
-                CLONE_NEWPID | CLONE_NEWIPC | CLONE_NEWUTS | CLONE_NEWNS, 0, 0, 0, 0);
+                CLONE_NEWPID | CLONE_NEWIPC | CLONE_NEWUTS | CLONE_NEWNS | SIGCHLD, 0, 0, 0, 0);
             if (tidUserDistro < 0)
             {
                 LOG_ERROR("clone tidUserDistro %d", errno);
@@ -129,6 +132,25 @@ int msg_process(const int msgSock, struct initrd_msg_buffer *buf, size_t len)
                 ret = mount_vhd(DEVICE_MODE_SCSI,
                         (char*)msg + msg->distro_scsi_path, 0, "/distro",
                         "ext4", 0, "discard,errors=remount-ro,data=ordered");
+
+                if (buf->type)
+                {
+                    char *pidData = NULL;
+                    if (asprintf(&pidData, "%d\n", getpid()) > 0)
+                    {
+                        util_writefile("/sys/fs/cgroup/memory/64M/tasks", pidData);
+                        free(pidData);
+                    }
+
+                    if (buf->type == MSG_IMPORT_DISTRO)
+                        ret = start_import("/distro");
+                    if (buf->type == MSG_EXPORT_DISTRO)
+                        ret = start_export("/distro");
+                    if (TEMP_FAILURE_RETRY(write(writeSock, &ret, sizeof ret)) < 0)
+                        LOG_ERROR("write(writeSock) %d", errno);
+                    close(writeSock);
+                    exit(ret);
+                }
 
                 util_mount(NULL, "/wslg", "tmpfs", 0, NULL, 0);
                 mount(NULL, "/wslg", NULL, MS_SHARED, NULL);
