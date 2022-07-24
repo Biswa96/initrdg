@@ -82,7 +82,7 @@ struct initrd_msg_send_caps
 {
     enum initrd_msg_type type;
     int len;
-    char retval;
+    char seccomp_notif;
     char release[];
 };
 

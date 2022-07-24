@@ -12,6 +12,7 @@
 #include <sys/syscall.h>
 #include <sys/utsname.h>
 #include <unistd.h>
+#include <linux/seccomp.h>
 
 #include "fs.h"
 #include "msg.h"
@@ -40,9 +41,10 @@ ssize_t msg_cap(const int msgSock)
         return -1;
     }
 
+    const unsigned int arg = SECCOMP_RET_USER_NOTIF;
     msg->type = MSG_SEND_CAPS;
     msg->len = msgLen;
-    msg->retval = 0;
+    msg->seccomp_notif = syscall(SYS_seccomp, SECCOMP_GET_ACTION_AVAIL, 0, &arg) == 0;
     strcpy(msg->release, unameBuf.release);
     ret = TEMP_FAILURE_RETRY(write(msgSock, msg, msgLen));
     if (ret != msgLen)
