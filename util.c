@@ -30,7 +30,11 @@ int util_devdelete(const char *scsiPath)
 
     ret = TEMP_FAILURE_RETRY(write(fd, "1\n", 2));
     if (ret < 0)
+    {
         LOG_ERROR("write(%s) %d", scsiPath, errno);
+    }
+    else
+        ret = 0;
 
     close(fd);
     return ret;

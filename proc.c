@@ -272,9 +272,21 @@ int start_init(int sock, char *rootDir, char *initCommand,
             exit(1);
         }
 
-        chdir(rootDir);
-        mount(".", "/", NULL, MS_MOVE, NULL);
-        chroot(".");
+        ret = chdir(rootDir);
+        if (ret >= 0)
+        {
+            ret = mount(".", "/", NULL, MS_MOVE, NULL);
+            if (ret >= 0)
+            {
+                ret = chroot(".");
+                if (ret < 0)
+                    LOG_ERROR("chroot %d", errno);
+            }
+            else
+                LOG_ERROR("mount %d", errno);
+        }
+        else
+            LOG_ERROR("chdir %d", errno);
 
         if (g_addGui)
         {
