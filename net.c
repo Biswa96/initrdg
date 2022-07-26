@@ -43,7 +43,7 @@ int connect_hv_socket(const unsigned int port, const int newfd,
     if (ret < 0)
     {
         LOG_ERROR("setsockopt %d", errno);
-        return ret;
+        goto cleanup;
     }
 
     struct sockaddr_vm addr = { 0 };
@@ -54,22 +54,20 @@ int connect_hv_socket(const unsigned int port, const int newfd,
     if (ret < 0)
     {
         LOG_ERROR("connect %d", errno);
-        return ret;
+        goto cleanup;
     }
 
-    if (newfd == -1 || sock == newfd)
+    if (newfd < 0 || sock == newfd)
         return sock;
 
     flag = cloexec ? O_CLOEXEC : O_RDONLY;
     ret = dup3(sock, newfd, flag);
     if (ret < 0)
-    {
         LOG_ERROR("dup3 %d", errno);
-        return ret;
-    }
 
+cleanup:
     close(sock);
-    return newfd;
+    return ret;
 }
 
 int mount_plan_nine(const char *source, const char *target)
@@ -152,14 +150,16 @@ int nic_addip(const char *ipaddr, const char *gateway, const char prefix)
     ret = nic_enable(sock, "lo");
 
     memset(&ifr, 0, sizeof ifr);
-    strncpy(ifr.ifr_ifrn.ifrn_name, "eth0", IFNAMSIZ);
-    addr = (struct sockaddr_in*)&ifr.ifr_ifru.ifru_addr;
+    strncpy(ifr.ifr_name, "eth0", IFNAMSIZ);
+    addr = (struct sockaddr_in *)&ifr.ifr_addr;
     addr->sin_family = AF_INET;
     addr->sin_addr.s_addr = inet_addr(ipaddr);
     ret = ioctl(sock, SIOCSIFADDR, &ifr);
     if (ret < 0)
         LOG_ERROR("ioctl(SIOCSIFADDR) %d", errno);
 
+    addr = (struct sockaddr_in *)&ifr.ifr_netmask;
+    addr->sin_family = AF_INET;
     addr->sin_addr.s_addr = htonl(-1 << (32 - prefix));
     ret = ioctl(sock, SIOCSIFNETMASK, &ifr);
     if (ret < 0)
@@ -172,7 +172,7 @@ int nic_addip(const char *ipaddr, const char *gateway, const char prefix)
     route.rt_gateway.sa_family = AF_INET;
     route.rt_genmask.sa_family = AF_INET;
     route.rt_flags = RTF_UP | RTF_GATEWAY;
-    addr = (struct sockaddr_in*)&route.rt_gateway;
+    addr = (struct sockaddr_in *)&route.rt_gateway;
     addr->sin_addr.s_addr = inet_addr(gateway);
     ret = ioctl(sock, SIOCADDRT, &route);
     if (ret < 0)
