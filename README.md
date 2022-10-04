@@ -81,7 +81,8 @@ Remember the full path of that for later use.
 
 * Run your preferred GNU/Linux distribution in WSL2.
 
-* Execute `wsl.exe -d system` to run the newly registered "system" distribution.
+* Execute `wsl.exe -d system -u root` to run the newly registered "system"
+distribution with root user.
 
 * Run the following commands in both your running distribution and "system"
 distribution as well. This step may not required in future, just thoughts.
@@ -93,6 +94,7 @@ export DISPLAY=:0
 export XDG_RUNTIME_DIR=/mnt/wsl/runtime-dir
 export PULSE_SERVER=/mnt/wsl/PulseServer
 export WSL2_INSTALL_PATH="C:\\WSL"
+export WSL2_EXECUTION_ALIAS_PATH="C:\\WSL"
 export WSL2_WESTON_SHELL_OVERRIDE=desktop-shell
 export WSL2_VM_ID=<guid>
 ```
