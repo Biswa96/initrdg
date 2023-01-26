@@ -15,6 +15,7 @@
 #include <sys/mount.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <linux/vm_sockets.h>
 #include <unistd.h>
 
@@ -139,6 +140,7 @@ int nic_addip(const char *ipaddr, const char *gateway, const char prefix)
     struct ifreq ifr;
     struct rtentry route;
     struct sockaddr_in *addr;
+    struct timespec start, end;
 
     const int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0)
@@ -148,24 +150,45 @@ int nic_addip(const char *ipaddr, const char *gateway, const char prefix)
     }
 
     ret = nic_enable(sock, "lo");
+    if (ret < 0)
+        goto cleanup;
 
+    clock_gettime(CLOCK_MONOTONIC, &start);
     memset(&ifr, 0, sizeof ifr);
     strncpy(ifr.ifr_name, "eth0", IFNAMSIZ);
     addr = (struct sockaddr_in *)&ifr.ifr_addr;
     addr->sin_family = AF_INET;
     addr->sin_addr.s_addr = inet_addr(ipaddr);
-    ret = ioctl(sock, SIOCSIFADDR, &ifr);
-    if (ret < 0)
-        LOG_ERROR("ioctl(SIOCSIFADDR) %d", errno);
+
+    while(true)
+    {
+        ret = ioctl(sock, SIOCSIFADDR, &ifr);
+        if (!ret)
+            break;
+
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        if ((ret < 0) && end.tv_nsec - start.tv_nsec
+            + 1000000000 * (end.tv_sec - start.tv_sec) > 5000000000)
+        {
+            LOG_ERROR("ioctl(SIOCSIFADDR) %d", errno);
+            goto cleanup;
+        }
+        usleep(10000);
+    }
 
     addr = (struct sockaddr_in *)&ifr.ifr_netmask;
     addr->sin_family = AF_INET;
     addr->sin_addr.s_addr = htonl(-1 << (32 - prefix));
     ret = ioctl(sock, SIOCSIFNETMASK, &ifr);
     if (ret < 0)
+    {
         LOG_ERROR("ioctl(SIOCSIFNETMASK) %d", errno);
+        goto cleanup;
+    }
 
     ret = nic_enable(sock, "eth0");
+    if (ret < 0)
+        goto cleanup;
 
     memset(&route, 0, sizeof route);
     route.rt_dst.sa_family = AF_INET;
@@ -178,6 +201,7 @@ int nic_addip(const char *ipaddr, const char *gateway, const char prefix)
     if (ret < 0)
         LOG_ERROR("ioctl(SIOCADDRT) %d", errno);
 
+cleanup:
     close(sock);
     return ret;
 }
